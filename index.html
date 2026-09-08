@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>정시응시NEXT</title>
+
+<link rel="manifest" href="/ontime-next/manifest.json">
+<meta name="theme-color" content="#B0632F">
+<meta name="color-scheme" content="light">
+
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="정시응시NEXT">
+<link rel="apple-touch-icon" href="/ontime-next/apple-touch-icon.png">
+<link rel="icon" href="/ontime-next/favicon.png">
+
+<style>
+:root{
+  /* 구글이 iframe 하단에 강제로 붙이는 회색 안내줄 높이.
+     기기마다 다를 수 있음. 주소 뒤에 ?crop=12 처럼 붙이면 즉시 반영되고 저장됨. */
+  --gs-crop: 8px;
+  --brand: #B0632F;
+  --bg: #FAF6F1;
+  --ink: #3A2E26;
+}
+*{box-sizing:border-box}
+html,body{
+  height:100%;margin:0;padding:0;
+  background:var(--bg);color:var(--ink);
+  overflow:hidden;overscroll-behavior:none;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans-serif;
+}
+
+/* ── 무대: 여기서 회색줄을 잘라낸다 ─────────────────────────── */
+#stage{position:fixed;inset:0;overflow:hidden;background:var(--bg)}
+#frame{
+  position:absolute;top:0;left:0;
+  width:100%;
+  height:calc(100% + var(--gs-crop));
+  border:0;display:block;background:var(--bg);
+}
+
+/* ── 첫 로딩 ────────────────────────────────────────────── */
+#boot{
+  position:fixed;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:14px;
+  background:var(--bg);z-index:20;transition:opacity .35s;
+}
+#boot.gone{opacity:0;pointer-events:none}
+#boot img{width:72px;height:72px;border-radius:18px}
+#boot p{font-size:13px;color:#7A6E63;margin:0}
+.spin{
+  width:22px;height:22px;border:2.5px solid #E4D9CD;border-top-color:var(--brand);
+  border-radius:50%;animation:sp .8s linear infinite;
+}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation-duration:2s}}
+
+/* ── 설치 안내 바 ───────────────────────────────────────── */
+#install{
+  position:fixed;left:0;right:0;bottom:0;z-index:30;
+  background:#fff;border-top:1px solid #EADFD4;
+  padding:14px 16px calc(14px + env(safe-area-inset-bottom));
+  box-shadow:0 -6px 20px rgba(58,46,38,.10);
+  transform:translateY(110%);transition:transform .3s ease;
+}
+#install.show{transform:translateY(0)}
+#install .row{display:flex;align-items:center;gap:12px;max-width:480px;margin:0 auto}
+#install img{width:44px;height:44px;border-radius:11px;flex:none}
+#install .txt{flex:1;min-width:0}
+#install .txt b{display:block;font-size:14px;font-weight:700;margin-bottom:3px}
+#install .txt span{display:block;font-size:12px;color:#7A6E63;line-height:1.45}
+#install button{
+  font-family:inherit;font-size:14px;font-weight:700;
+  border:0;border-radius:10px;padding:11px 16px;cursor:pointer;flex:none;
+  background:var(--brand);color:#fff;
+}
+#install button:active{transform:scale(.97)}
+#install .close{
+  background:none;color:#A5988C;font-size:20px;font-weight:400;
+  padding:4px 8px;line-height:1;
+}
+#install :focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+
+/* iOS 안내(버튼 대신 문장) */
+#install.ios .row{align-items:flex-start}
+#install.ios .txt span strong{color:var(--ink)}
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <iframe id="frame"
+          src="https://script.google.com/macros/s/AKfycbxsZE-jy0BVuck-G-liJcIgJwVteMuaZs3A5TWSvPIKFiNb5s8y_imcJ3nHnXwpEucG0w/exec"
+          referrerpolicy="no-referrer"
+          allow="clipboard-write; fullscreen"
+          title="정시응시NEXT"></iframe>
+</div>
+
+<div id="boot">
+  <img src="/ontime-next/icon-192.png" alt="">
+  <div class="spin"></div>
+  <p>불러오는 중…</p>
+</div>
+
+<div id="install" role="region" aria-label="앱 설치 안내">
+  <div class="row">
+    <img src="/ontime-next/icon-192.png" alt="">
+    <div class="txt">
+      <b>홈 화면에 앱으로 저장하기</b>
+      <span id="install-msg">한 번 설치하면 다음부터 아이콘으로 바로 열립니다.</span>
+    </div>
+    <button id="install-go" type="button">설치하기</button>
+    <button id="install-x" class="close" type="button" aria-label="닫기">×</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  var KEY_CROP    = 'ontimeNext.gsCrop';
+  var KEY_DISMISS = 'ontimeNext.installDismissed';
+
+  var frame   = document.getElementById('frame');
+  var boot    = document.getElementById('boot');
+  var bar     = document.getElementById('install');
+  var goBtn   = document.getElementById('install-go');
+  var xBtn    = document.getElementById('install-x');
+  var msg     = document.getElementById('install-msg');
+
+  /* ── 1. 회색줄 잘라내기 값 (?crop=N 으로 폰에서 바로 조정) ── */
+  function applyCrop(px){
+    document.documentElement.style.setProperty('--gs-crop', px + 'px');
+  }
+  try{
+    var q = new URLSearchParams(location.search).get('crop');
+    if(q !== null && !isNaN(parseInt(q,10))){
+      localStorage.setItem(KEY_CROP, String(parseInt(q,10)));
+    }
+    var saved = localStorage.getItem(KEY_CROP);
+    if(saved !== null) applyCrop(parseInt(saved,10));
+  }catch(e){}
+  window.setCrop = function(px){                 // PC 콘솔용
+    try{ localStorage.setItem(KEY_CROP, String(px)); }catch(e){}
+    applyCrop(px);
+  };
+
+  /* ── 2. lockFrameWidth: standalone에서 iframe이 980px 데스크톱 폭으로
+        레이아웃 잡는 것 방지 ─────────────────────────────── */
+  function lockFrameWidth(){
+    var w = Math.round(
+      (window.visualViewport && window.visualViewport.width) ||
+      document.documentElement.clientWidth ||
+      window.innerWidth
+    );
+    if(w > 0) frame.style.width = w + 'px';
+  }
+  lockFrameWidth();
+  window.addEventListener('resize', lockFrameWidth);
+  window.addEventListener('orientationchange', function(){ setTimeout(lockFrameWidth, 300); });
+  if(window.visualViewport) window.visualViewport.addEventListener('resize', lockFrameWidth);
+
+  /* ── 3. 로딩 화면 ──────────────────────────────────────── */
+  function hideBoot(){ boot.classList.add('gone'); }
+  frame.addEventListener('load', hideBoot);
+  setTimeout(hideBoot, 8000);                    // 안전장치
+
+  /* ── 4. 설치 안내 ──────────────────────────────────────── */
+  var standalone =
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+    window.navigator.standalone === true;
+
+  var ua  = navigator.userAgent;
+  var iOS = /iPad|iPhone|iPod/.test(ua) ||
+            (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  var dismissed = false;
+  try{ dismissed = localStorage.getItem(KEY_DISMISS) === '1'; }catch(e){}
+
+  function showBar(){ setTimeout(function(){ bar.classList.add('show'); }, 1200); }
+  function hideBar(){ bar.classList.remove('show'); }
+
+  xBtn.addEventListener('click', function(){
+    hideBar();
+    try{ localStorage.setItem(KEY_DISMISS, '1'); }catch(e){}
+  });
+
+  if(!standalone && !dismissed){
+    if(iOS){
+      bar.classList.add('ios');
+      goBtn.style.display = 'none';
+      msg.innerHTML = '아래 <strong>공유 ⬆︎</strong> → <strong>홈 화면에 추가</strong>를 누르면 앱처럼 저장됩니다.';
+      showBar();
+    }
+    // 안드로이드/크롬은 아래 beforeinstallprompt에서 처리
+  }
+
+  var deferred = null;
+  window.addEventListener('beforeinstallprompt', function(e){
+    e.preventDefault();
+    deferred = e;
+    if(!standalone && !dismissed) showBar();
+  });
+
+  goBtn.addEventListener('click', function(){
+    if(!deferred) return;
+    deferred.prompt();
+    deferred.userChoice.then(function(){ deferred = null; hideBar(); });
+  });
+
+  window.addEventListener('appinstalled', function(){
+    hideBar();
+    try{ localStorage.setItem(KEY_DISMISS, '1'); }catch(e){}
+  });
+
+  /* ── 5. 서비스워커 ─────────────────────────────────────── */
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('/ontime-next/sw.js', { scope: '/ontime-next/' })
+        .catch(function(){});
+    });
+  }
+})();
+</script>
+</body>
+</html>
